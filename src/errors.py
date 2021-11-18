@@ -1,4 +1,4 @@
- class ConfigFileIncorrectFormat(Exception):
+class ConfigFileIncorrectFormat(Exception):
      """Exception is raised when the config file is not in the correct format.
  
      Attributes:

@@ -17,6 +17,7 @@ class YoloConfigReader(ConfigReader):
             raise TypeError("The config path should be a string")
         self._config_path = config_path
 
+    #TODO: Remove the extra line written before returning from function
     def parse_config(self):
         """
         Function to parse the config file into a list of modules. Each module is a dictionary with the parsed values
@@ -27,6 +28,10 @@ class YoloConfigReader(ConfigReader):
         config_file = open(self.config_path, 'r')
 
         darknet_modules, detection_modules = [], []
+        
+        #modules_list initially parses darket feature extractor modules
+        #When detection modules start, it points to detection_modules and 
+        #parses them in detection_modules
         modules_list = darknet_modules
         current_module = {}
         
@@ -48,9 +53,11 @@ class YoloConfigReader(ConfigReader):
                     current_module[key.strip()] = [float(v) for v in value.split(",")]
                 else:
                     try:
-                        current_module[key.strip()] = float(value)  #TODO: This is a big rule. They key value pairs in config are all numbers
+                        current_module[key.strip()] = float(value) #If it's numerical string, use it
                     except ValueError:
-                        current_module[key.strip()] = value
+                        current_module[key.strip()] = value # else it is a word
+        if len(current_module) > 1:
+            modules_list.append(current_module)
         
         hyper_parameters, *darknet_modules = darknet_modules
 

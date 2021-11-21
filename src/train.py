@@ -3,10 +3,13 @@ import torch
 from models import Yolov3Model
 
 config_path = "../cfg/yolov3.cfg"
+coco_config_path = "../cfg/coco.data"
+
 yolo = Yolov3Model(config_path)
 
 
-inp = torch.ones((1, 3, 416, 416))
+
+inp = torch.ones((1, 3, 416, 416)) 
 out = yolo(inp)
 
 print ("Finished the forward pass")

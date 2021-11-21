@@ -91,6 +91,10 @@ class YoloLayer(nn.Module):
                         , grid_width, grid_height)
         """
         batch_size, _, grid_height, grid_width = inp.shape
+        #self.grid_stride implementation requires square images
+        if grid_width != grid_height:
+            ValueError("Image Width and Height mismatch." 
+                "Pad input image with zeros") 
         self.grid_stride = image_size // grid_height
 
         #Reshape the input to have anchor specific outputs along last dim

@@ -1,9 +1,7 @@
+from errors import ConfigFileIncorrectFormat
+
+
 class ConfigReader:
-    def parse_config(self):
-        raise NotImplementedError
-
-
-class YoloConfigReader(ConfigReader):
     def __init__(self, config_path):
         self.config_path = config_path
     
@@ -16,6 +14,14 @@ class YoloConfigReader(ConfigReader):
         if not isinstance(config_path, str):
             raise TypeError("The config path should be a string")
         self._config_path = config_path
+
+    def parse_config(self):
+        raise NotImplementedError
+
+
+class YoloConfigReader(ConfigReader):
+    def __init__(self, config_path):
+        super().__init__(config_path)
 
     #TODO: Remove the extra line written before returning from function
     def parse_config(self):
@@ -70,3 +76,23 @@ class YoloConfigReader(ConfigReader):
                 curr_head = []
 
         return hyper_parameters, darknet_modules, yolo_heads
+
+
+class CocoConfigReader(ConfigReader):
+    def __init__(self, config_path):
+        super().__init__(config_path)
+    
+    def parse_config(self):
+        coco_config_dict = {}
+
+        with open(self.config_path, "r") as coco_config:
+            for line in coco_config:
+                if not line:
+                    continue
+                split_line = line.split("=")
+                if len(split_line) != 2:
+                    raise ConfigFileIncorrectFormat("Coco config line should have exactly one =")
+                key, value = split_line
+                coco_config_dict[key.strip()] = value.strip()
+        
+        return coco_config_dict

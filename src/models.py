@@ -1,12 +1,14 @@
 from collections import namedtuple
+from typing import List
 
+import numpy as np
 import torch
 from torch import nn
 
 # from builders import DarkNetBuilder, YoloHeadBuilder
 import builders
 from config_reader import YoloConfigReader
-
+from errors import WeightFileLoadError
 
 SkipConnection = namedtuple("SkipConnection", ["source"])
 FPNLayer = namedtuple("FPNLayer", ["sources"])
@@ -67,9 +69,101 @@ class Yolov3Model(nn.Module):
         else:
             return torch.cat(detection_grid_outputs, 1) # stack along achor dim
     
+    #TODO: make repr more representative
     def __repr__(self):
         return str(self.yolo_modules)
-        
+
+    #TODO: Remove location hardcoding - use pathlib
+    def load_weights(self, weights_file="../weights/yolov3.weights"):
+        """
+        Function loads the downloaded weigts from pjreddie to the yolov3 net
+        Logic follows:
+        https://github.com/pjreddie/darknet/blob/f8f67cd461f20b71fd2ae1a46d04e99ed9f9f51d/src/parser.c#L1218
+
+        Args:
+            weights_file(str): location of the weights file
+        """
+
+        print ("Loading weights now")
+
+        weights_fp = open(weights_file, "rb")
+        #Advance file pointer as first 20 bytes are header vals
+        np.fromfile(weights_fp, dtype=np.int32, count=5)
+
+        temp = 0
+        for module in self.yolo_modules:
+            #Only convolutional component have trainable weights
+            #All other layers are either reshaping or redirecting input
+            if not isinstance(module, list):
+                continue
+            
+            #Only executed for convolutional modules
+            if not module or not isinstance(module[0], torch.nn.Conv2d):
+                raise ValueError("Weights should be loaded for,"
+                " Convolutional module")
+
+            with_batch_norm = False
+            try:
+                if isinstance(module[1], torch.nn.BatchNorm2d):
+                    with_batch_norm = True
+            except IndexError:
+                pass #module only contains convolution, do nothing
+            
+            conv_layer = module[0]
+            if with_batch_norm:
+                batch_norm_layer = module[1]
+                num_biases = batch_norm_layer.bias.numel()
+                num_weights = batch_norm_layer.weight.numel()
+                num_run_mean = batch_norm_layer.running_mean.numel()
+                num_run_var = batch_norm_layer.running_var.numel()
+
+                biases = self._torch_tensor_from_file_pointer(weights_fp, num_biases)
+                weights = self._torch_tensor_from_file_pointer(weights_fp, num_weights)
+                run_mean = self._torch_tensor_from_file_pointer(weights_fp, num_run_mean)
+                run_var = self._torch_tensor_from_file_pointer(weights_fp, num_run_var)
+
+                batch_norm_layer.bias.data.copy_(
+                    biases.view_as(batch_norm_layer.bias))
+                batch_norm_layer.weight.data.copy_(
+                    weights.view_as(batch_norm_layer.weight))
+                batch_norm_layer.running_mean.data.copy_(
+                    run_mean.view_as(batch_norm_layer.running_mean))
+                batch_norm_layer.running_var.data.copy_(
+                    run_var.view_as(batch_norm_layer.running_var))
+            else:
+                #If no batch norm layer, convolutional layer has(requires) bias
+                num_biases = conv_layer.bias.numel()
+                biases = self._torch_tensor_from_file_pointer(weights_fp, num_biases)
+                conv_layer.bias.data.copy_(
+                    biases.view_as(conv_layer.bias))
+            
+            #Load convolutional weights
+            num_weights = conv_layer.weight.numel()
+            weights = self._torch_tensor_from_file_pointer(weights_fp, num_weights)
+            conv_layer.weight.data.copy_(weights.view_as(conv_layer.weight))
+
+        print ("Finished loading weights")  
+    
+
+    @staticmethod
+    def _torch_tensor_from_file_pointer(file_pointer, count, dtype=np.float32):
+        """
+        Method to load a torch tensor of a given size from a file pointer of weight file
+
+        Use Function to iteratively load weights without loading entire file
+         in memory
+
+        Args:
+        file_pointer(_io.TextIOWrapper): File pointer to weight file
+        count(int) : Number of elements to be read from file
+        dtype(np.dtype) : type of elements to be read from file
+        """
+        np_array = np.fromfile(file_pointer, dtype=dtype, count=count)
+        if np_array.size == 0:
+            raise WeightFileLoadError(f"No more weights to load from" 
+                f"file {file_pointer.name}")
+        return torch.from_numpy(np_array)
+
 
 class YoloLayer(nn.Module):
     def __init__(self, anchors, n_classes):

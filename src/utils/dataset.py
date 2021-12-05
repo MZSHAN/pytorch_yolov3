@@ -33,7 +33,7 @@ class CocoImagePathFileDataset(Dataset):
         # It is only done once per dataloader so it's fine
 
     def __len__(self):
-        return len(self.image_paths)        
+        return len(self.image_paths)
     
     def _load_image_paths(self, image_path_file):
         if not isinstance(image_path_file, str):
@@ -46,15 +46,21 @@ class CocoImagePathFileDataset(Dataset):
         with open(image_path_file, "r") as image_locations:
             for image_path in image_locations:
                 image_path = image_path.strip()
-                self._check_label_present(image_path)
-                image_paths.append(image_path)
+                try:
+                    self._check_label_present(image_path)
+                    image_paths.append(image_path)
+                except FileNotFoundError as e:
+                    #If just label absent, ignore. If dir incorrect, alert
+                    if not Path(image_path).parent.is_dir():
+                        raise FileNotFoundError(f"The image does not exist"
+                         f"at {image_path}")
             
         return image_paths
     
     @staticmethod
     def _check_label_present(image_loc):
         if "/images/" not in image_loc:
-            raise ValueError("Image path must have the folder images")
+            raise ValueError("Image path must have the folder \"images\"")
         
         label_file = CocoImagePathFileDataset._get_labelfile(image_loc)
 

@@ -50,7 +50,7 @@ class Builder:
 
     @staticmethod
     def conv_builder(conv_componet, filters):
-        conv_module = []
+        conv_module = nn.ModuleList()
         try:
             arg_dict = {"in_channels":filters[-1]}
             arg_dict["out_channels"] = int(conv_componet["filters"])
@@ -127,7 +127,24 @@ class DarkNetBuilder(Builder):
 
     
 class YoloHeadBuilder(Builder):
+    """
+    Class to build Yolo Heads from list of yolo-head components
+
+    Yolohead takes the features from the darknet feature extractor, transforms
+    the features(convolutions) and finally passes them through a yolo layer
+
+    build_model function takes a list of modules and appends it with  modules 
+    constructed from yolo-head components
+    """
     def __init__(self, components):
+        """
+        Constructor for the Yolohead builder
+        Args:
+        compenents(list): List of yolo head component
+        
+            Each yolo head component is a list of possible module dictionaries
+            Module dictioaries contain information about the torch nn
+        """
         super().__init__(components)
     
     def build_model(self, filters, modules):

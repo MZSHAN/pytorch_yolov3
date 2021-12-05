@@ -1,15 +1,28 @@
 from collections import namedtuple
+from typing import List
 
+import numpy as np
 import torch
 from torch import nn
 
 # from builders import DarkNetBuilder, YoloHeadBuilder
 import builders
 from config_reader import YoloConfigReader
+from errors import WeightFileLoadError
 
 
-SkipConnection = namedtuple("SkipConnection", ["source"])
-FPNLayer = namedtuple("FPNLayer", ["sources"])
+# SkipConnection and FPNLayer classes are hacky
+# Made them into nn modules to include in nn.ModuleList
+class SkipConnection(nn.Module):
+    def __init__(self, source):
+        super().__init__()
+        self.source = source
+
+
+class FPNLayer(nn.Module):
+    def __init__(self, sources):
+        super().__init__()
+        self.sources = sources
 
 
 class Yolov3Model(nn.Module):
@@ -19,7 +32,8 @@ class Yolov3Model(nn.Module):
             YoloConfigReader(config_path).parse_config()
 
         filter_sizes = [channels] #Maintains filter sizes for building modules
-        self.yolo_modules = [] #Contains the yolo layers to be used in forward
+        # Will contain the yolo layers to be used in forward
+        self.yolo_modules = nn.ModuleList()
         
         builders.DarkNetBuilder(darknet_config).build_model(
             filter_sizes,
@@ -42,7 +56,7 @@ class Yolov3Model(nn.Module):
 
         #Builder has ensured that all modules here are supported
         for module in self.yolo_modules:
-            if isinstance(module, list): #Convolutional module
+            if isinstance(module, nn.ModuleList): #Convolutional module
                 for component in module:
                     inp = component(inp)
             elif isinstance(module, SkipConnection):
@@ -65,11 +79,8 @@ class Yolov3Model(nn.Module):
         if self.training:
             return detection_grid_outputs
         else:
+            print ([(x.shape, type(x)) for x in detection_grid_outputs])
             return torch.cat(detection_grid_outputs, 1) # stack along achor dim
-    
-    def __repr__(self):
-        return str(self.yolo_modules)
-        
 
 class YoloLayer(nn.Module):
     def __init__(self, anchors, n_classes):
@@ -104,7 +115,7 @@ class YoloLayer(nn.Module):
         
         if not self.training:
             if not self.grid:
-                self.grid = self._make_grid(grid_height, grid_width, self.num_of_anchors)
+                self.grid = self._make_grid(grid_height, grid_width)
 
             #Calculate center of anchor box
             inp[..., 0:2] = (inp[...,0:2].sigmoid() + self.grid) * self.grid_stride
@@ -112,15 +123,15 @@ class YoloLayer(nn.Module):
             inp[..., 2:4] = torch.exp(inp[...,2:4]) * self.cell_anchors
             #Calculate class probabilities
             inp[..., 4:] = inp[...,4:].sigmoid()
-            inp.reshape(batch_size, -1, self.neurons_per_anchor)
+            inp = inp.view(batch_size, -1, self.neurons_per_anchor)
         
         return inp
 
     @staticmethod
-    def _make_grid(grid_height, grid_width, num_anchors):
+    def _make_grid(grid_height, grid_width):
         row_nums, col_nums = torch.meshgrid(torch.arange(grid_height),
                                 torch.arange( grid_width))
         #Make grid and reshape to ease calculation  of center of anchor boxes
         grid = torch.stack((row_nums, col_nums), 2).view(
-                                        1, num_anchors, 1, 1, 2)
+                                        1, 1, grid_height, grid_width, 2)
         return grid

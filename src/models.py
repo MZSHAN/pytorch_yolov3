@@ -81,7 +81,6 @@ class Yolov3Model(nn.Module):
         else:
             return torch.cat(detection_grid_outputs, 1) # stack along achor dim
 
-
     #TODO: Remove location hardcoding - use pathlib
     def load_weights(self, weights_file="../weights/yolov3.weights"):
         """

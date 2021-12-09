@@ -1,5 +1,4 @@
 import torch
-from functools import partial
 
 
 #Tested
@@ -12,6 +11,9 @@ def non_max_suppression(anchor_outputs, object_thresh=0.5, iou_thresh=0.5):
         It then continuously picks anchors boxes for a particular class with 
         max class probability and rejects all boxes of same class that have
         IOU > iou_thresh : as these were duplicate detections
+
+        ****Function changes the reprentation of anchor_boxes
+            (see args and return)
         
         Args:
         anchor_outputs(torch.tensor) : 
@@ -27,7 +29,7 @@ def non_max_suppression(anchor_outputs, object_thresh=0.5, iou_thresh=0.5):
             iou threshold to suppress duplicate detections in image
 
         returns:
-        tensor containing (image_index, x1, y1, x2, y2, 
+        tensor containing (image_index, x1, y1, x2, y2, objectness score,
             class probability, class prediction ) where x1, y1, x2, y2
             are top left and bottom right corners of the bounding box
     """
@@ -106,7 +108,7 @@ def non_max_suppression(anchor_outputs, object_thresh=0.5, iou_thresh=0.5):
                                 nms_image_detections), axis=1)
         nms_output.append(nms_image_detections)
         
-    nms_output = torch.cat(nms_output, axis=0) if nms_output else None
+    nms_output = torch.stack(nms_output) if nms_output else None
 
     return nms_output
 
@@ -178,3 +180,96 @@ def get_bbox_corners(center_bbox_repr):
     box_preds[...,3] = center_y + half_width 
 
     return box_preds
+
+
+def load_classes(classes_file):
+    """
+    Function to load names of classification classes
+
+    Args:
+        classes_file(str) - path to file that contains class names
+    returns:
+        array containing names of classes at the corresponding cllass index
+    """
+    fp = open(classes_file, "r")
+    class_names = fp.read().split("\n")[:-1]
+    return class_names
+
+
+def convert_center_to_corner_repr(box_labels):
+    """
+    Function to convert bounding box representatation from  (center_x, 
+        center_y, height, width) to 2 corner format (x1, y1, x2, y2)
+    
+    Args:
+        box_labels(tensor) - shape(:, 4)
+            contains anchor box representation in (center_x, 
+            center_y, height, width) format
+    returns: 
+        tensor - shape(:,4)
+            anchor boxes in (x1, y1, x2, y2) format
+    """
+    x1 = (box_labels[:,0] - box_labels[:,2]/2).reshape(-1, 1)
+    x2 = (box_labels[:,0] + box_labels[:,2]/2).reshape(-1, 1) 
+    y1 = (box_labels[:,1] - box_labels[:,3]/2).reshape(-1, 1) 
+    y2 = (box_labels[:,1] + box_labels[:,3]/2).reshape(-1, 1) 
+
+    box_labels = torch.cat((x1, y1, x2, y2), axis = 1)
+    
+    return box_labels
+
+
+def convert_corner_to_pyplot_repr(box_labels):
+    """
+    Function to convert two corner representation of anchor boxes
+        1 corner, height and width
+    
+    Pyplot patches.rectangle requires bbox representation in this
+    format
+
+    Args:
+        box_labels(tensor) - shape(:, 4)
+            contains anchor box representation in (x1, y1, x2, y2) format
+        
+    returns:
+        anchor box representation in top_left_x, top_left_y, height, width
+    """
+    x = (box_labels[:,0]).reshape(-1,1)
+    y = (box_labels[:,1]).reshape(-1,1)
+    height = (box_labels[:,2] - box_labels[:,0]).reshape(-1, 1)
+    width = (box_labels[:,3] - box_labels[:,1]).reshape(-1, 1)
+
+    return torch.cat((x, y, height, width), axis = 1)
+
+
+def convert_corner_to_center_repr(box_labels):
+    """
+    Function to convert bounding box representatation from  2 corner format
+     (x1, y1, x2, y2) to (center_x, center_y, height, width)
+    
+    Args:
+        box_labels(tensor) - shape(:, 4)
+            contains anchor box representation in (x1, y1, x2, y2) format
+    returns: 
+        tensor - shape(:,4)
+            anchor boxes in (center_x, center_y, height, width) format
+    """    
+    x = ((box_labels[:,0] + box_labels[:, 2]) / 2).reshape(-1, 1)
+    y = ((box_labels[:,1] + box_labels[:, 3]) / 2).reshape(-1, 1)
+    height = (box_labels[:,2] - box_labels[:,0]).reshape(-1, 1)
+    width = (box_labels[:,3] - box_labels[:,1]).reshape(-1, 1)
+
+    return torch.cat((x, y, height, width), axis = 1)
+
+
+def get_four_corners_from_2_corners(x1, y1, x2, y2):
+    """
+    Function returns all corners of a bounding box given 2 corners
+
+    Args:
+        x1, y1, x3, y2 (int) - top left and bottom right corners of
+            box
+        returns
+            list containing all corners of box. 
+    """
+    return [x1, y1, x1, y2, x2, y2, x2, y1]

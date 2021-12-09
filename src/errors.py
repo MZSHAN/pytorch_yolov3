@@ -29,12 +29,3 @@ class LabelFileReadError(Exception):
  
      def __str__(self):
          return self.message    
-
-
-class WeightFileLoadError(Exception):
-     def __init__(self, message="Error in loading weight from file"):
-         self.message = message
-         super().__init__(self.message)
- 
-     def __str__(self):
-         return self.message    

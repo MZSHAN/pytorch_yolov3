@@ -10,6 +10,6 @@ def get_data_loader(config_path, config_reader_class, dataset_class, batch_size=
     train_file = pathlib.Path.cwd().parent / data_config[mode]
     dataset = dataset_class(str(train_file))
 
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    data_loader = DataLoader(dataset, batch_size=batch_size)
 
     return data_loader

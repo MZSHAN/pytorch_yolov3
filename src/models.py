@@ -79,7 +79,6 @@ class Yolov3Model(nn.Module):
         if self.training:
             return detection_grid_outputs
         else:
-            print ([(x.shape, type(x)) for x in detection_grid_outputs])
             return torch.cat(detection_grid_outputs, 1) # stack along achor dim
 
     #TODO: Remove location hardcoding - use pathlib
@@ -92,9 +91,6 @@ class Yolov3Model(nn.Module):
         Args:
             weights_file(str): location of the weights file
         """
-
-        print ("Loading weights now")
-
         weights_fp = open(weights_file, "rb")
         #Advance file pointer as first 20 bytes are header vals
         np.fromfile(weights_fp, dtype=np.int32, count=5)
@@ -103,7 +99,7 @@ class Yolov3Model(nn.Module):
         for module in self.yolo_modules:
             #Only convolutional component have trainable weights
             #All other layers are either reshaping or redirecting input
-            if not isinstance(module, list):
+            if not isinstance(module, nn.ModuleList):
                 continue
             
             #Only executed for convolutional modules
@@ -151,7 +147,7 @@ class Yolov3Model(nn.Module):
             weights = self._torch_tensor_from_file_pointer(weights_fp, num_weights)
             conv_layer.weight.data.copy_(weights.view_as(conv_layer.weight))
 
-        print ("Finished loading weights")  
+        print ("Finished loading Yolov3 weights")  
 
     @staticmethod
     def _torch_tensor_from_file_pointer(file_pointer, count, dtype=np.float32):
@@ -205,7 +201,7 @@ class YoloLayer(nn.Module):
             .permute(0, 1, 3, 4, 2).contiguous())
         
         if not self.training:
-            if not self.grid:
+            if self.grid is None:
                 self.grid = self._make_grid(grid_height, grid_width)
 
             #Calculate center of anchor box
@@ -220,7 +216,7 @@ class YoloLayer(nn.Module):
 
     @staticmethod
     def _make_grid(grid_height, grid_width):
-        row_nums, col_nums = torch.meshgrid(torch.arange(grid_height),
+        col_nums, row_nums = torch.meshgrid(torch.arange(grid_height),
                                 torch.arange( grid_width))
         #Make grid and reshape to ease calculation  of center of anchor boxes
         grid = torch.stack((row_nums, col_nums), 2).view(

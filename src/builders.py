@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn.modules.activation import LeakyReLU
 
 import models
 from errors import ConfigFileIncorrectFormat
@@ -68,7 +69,10 @@ class Builder:
             activation_fn = ACTIVATION_MAP.get(conv_componet["activation"], None)
             if activation_fn:
                 #TODO: Check if leaky slope has to be changed
-                conv_module.append(activation_fn())
+                if activation_fn == LeakyReLU:
+                    conv_module.append(activation_fn(0.1))
+                else:
+                    conv_module.append(activation_fn())
 
             filters.append(arg_dict["out_channels"])
             return conv_module
@@ -91,7 +95,7 @@ class Builder:
         # all_anchors = list(map(int, yolo_component["anchors"].split(",")))
         # anchor_masks = list(map(int, yolo_component["mask"].split(",")))
 
-        anchors = [(all_anchors[i], all_anchors[i+1]) for i in anchor_masks]
+        anchors = [(all_anchors[2*i], all_anchors[2*i+1]) for i in anchor_masks]
         n_classes = int(yolo_component["classes"])
 
         # Since this output layer, won't be used 
